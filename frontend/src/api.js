@@ -1,8 +1,6 @@
 import axios from 'axios'
 
-// Prefer env-configured API base; fallback to local dev server
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8000';
-
+const API_BASE = 'https://docuverse-o7b1.onrender.com'
 // Create axios instance
 const api = axios.create({
   baseURL: API_BASE,
