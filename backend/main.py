@@ -10,7 +10,6 @@ import os
 import faiss
 import numpy as np
 import google.generativeai as genai
-from openai import OpenAI
 from dotenv import load_dotenv
 from typing import List
 
@@ -28,10 +27,6 @@ for m in genai.list_models():
     if 'generateContent' in m.supported_generation_methods:
         print(f"  ✓ {m.name}")
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-openai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
-if openai_client:
-    print(" OpenAI client initialized as backup")
 
 app = FastAPI(title="RAG Chatbot Backend ")
 
@@ -229,22 +224,7 @@ Provide a detailed answer based on the document content above."""
             "answer": response.text.strip()
         }
     except Exception as e1:
-        if openai_client:
-            try:
-                response = openai_client.chat.completions.create(
-                    model="gpt-3.5-turbo",
-                    messages=[
-                        {"role": "system", "content": "You are a helpful assistant that answers questions based on document content."},
-                        {"role": "user", "content": prompt}
-                    ]
-                )
-                return {
-                    "answer": response.choices[0].message.content
-                }
-            except Exception as e2:
-                return {"answer": f"Error: Gemini failed ({str(e1)}), OpenAI failed ({str(e2)})"}
-        else:
-            return {"answer": f"Error: {str(e1)}"}
+        return {"answer": f"Error: {str(e1)}"}
 
 
 @app.post("/summarize")
@@ -286,23 +266,7 @@ Provide a comprehensive summary that covers the main points and key information.
             "filename": doc.filename
         }
     except Exception as e1:
-        if openai_client:
-            try:
-                response = openai_client.chat.completions.create(
-                    model="gpt-3.5-turbo",
-                    messages=[
-                        {"role": "system", "content": "You are a helpful assistant that creates concise summaries."},
-                        {"role": "user", "content": prompt}
-                    ]
-                )
-                return {
-                    "summary": response.choices[0].message.content,
-                    "filename": doc.filename
-                }
-            except Exception as e2:
-                return {"summary": f"Error: Gemini failed ({str(e1)}), OpenAI failed ({str(e2)})"}
-        else:
-            return {"summary": f"Error: {str(e1)}"}
+        return {"summary": f"Error: {str(e1)}"}
 
 
 @app.get("/documents/{user_id}")
