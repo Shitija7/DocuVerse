@@ -11,7 +11,7 @@ JWT_SECRET = os.getenv("JWT_SECRET", "supersecret")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 1 day
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["bcrypt_sha256"], deprecated="auto")
 
 # ------------------------
 # Password helpers
@@ -20,7 +20,12 @@ def _normalize_password(password: str) -> str:
     if password is None:
         return ""
     password_bytes = password.encode("utf-8")
-    return password_bytes[:72].decode("utf-8", errors="ignore")
+    if len(password_bytes) > 72:
+        password_bytes = password_bytes[:72]  # truncate manually
+    # Use 'ignore' so invalid byte tails are dropped without introducing U+FFFD,
+    # which could expand to >72 bytes when re-encoded by passlib.
+    return password_bytes.decode("utf-8", errors="ignore")
+
 
 def get_password_hash(password: str) -> str:
     normalized = _normalize_password(password)
@@ -29,6 +34,7 @@ def get_password_hash(password: str) -> str:
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     normalized = _normalize_password(plain_password)
     return pwd_context.verify(normalized, hashed_password)
+
 
 # ------------------------
 # JWT helpers
