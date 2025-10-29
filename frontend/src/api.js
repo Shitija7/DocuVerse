@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-const API_BASE = 'http://localhost:8000'
+const API_BASE = 'https://docuverse-o7b1.onrender.com'
 
 // Create axios instance
 const api = axios.create({
