@@ -2,23 +2,31 @@ from datetime import datetime, timedelta
 from jose import jwt
 import os
 from dotenv import load_dotenv
+from passlib.context import CryptContext
 
 load_dotenv()
 
 JWT_SECRET = os.getenv("JWT_SECRET", "supersecret")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 1 day
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  
 
 # ------------------------
 # Password helpers
 # ------------------------
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
 def get_password_hash(password: str) -> str:
-    # Simply return the password as-is (plain text)
-    return password or ""
+    if not password:
+        return ""
+    return pwd_context.hash(password)
 
 def verify_password(plain_password: str, stored_password: str) -> bool:
-    # Compare plain text directly
-    return plain_password == stored_password
+    if not stored_password:
+        return False
+    try:
+        return pwd_context.verify(plain_password, stored_password)
+    except Exception:
+        return False
 
 # ------------------------
 # JWT helpers
