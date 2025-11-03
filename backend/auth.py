@@ -2,7 +2,6 @@ from datetime import datetime, timedelta
 from jose import jwt
 import os
 from dotenv import load_dotenv
-from passlib.context import CryptContext
 
 load_dotenv()
 
@@ -13,28 +12,12 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
 # ------------------------
 # Password helpers
 # ------------------------
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-def _truncate_to_72_bytes(password: str) -> str:
-    if not password:
-        return ""
-    b = password.encode("utf-8")
-    return b[:72].decode("utf-8", errors="ignore")
-
 def get_password_hash(password: str) -> str:
-    truncated = _truncate_to_72_bytes(password)
-    if not truncated:
-        return ""
-    return pwd_context.hash(truncated)
+
+    return password or ""
 
 def verify_password(plain_password: str, stored_password: str) -> bool:
-    if not stored_password:
-        return False
-    try:
-        truncated = _truncate_to_72_bytes(plain_password)
-        return pwd_context.verify(truncated, stored_password)
-    except Exception:
-        return False
+    return plain_password == stored_password
 
 # ------------------------
 # JWT helpers
