@@ -22,7 +22,9 @@ function Login({ onLogin }) {
       const response = await login(username, password)
       onLogin(response.access_token, response.user_id, response.username)
     } catch (err) {
-      setError(err.response?.data?.detail || 'Authentication failed')
+      console.error(' Authentication error:', err)
+      console.error('Error response:', err.response?.data)
+      setError(err.response?.data?.detail || err.message || 'Authentication failed')
     } finally {
       setLoading(false)
     }

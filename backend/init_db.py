@@ -1,46 +1,48 @@
 #!/usr/bin/env python3
-"""Initialize or reset the database"""
+"""Initialize or verify Supabase database connection and create test user"""
 import os
-from database import engine, SessionLocal
-from models import Base, User
+import logging
+from database import get_db
 from auth import get_password_hash
+from dotenv import load_dotenv
 
-# Delete existing database files if they exist
-db_files = ['./test.db', './rag_chatbot.db']
-for db_file in db_files:
-    if os.path.exists(db_file):
-        try:
-            os.remove(db_file)
-            print(f"✓ Deleted {db_file}")
-        except PermissionError:
-            print(f"⚠ Skipping {db_file} (database is in use. Stop the backend and delete manually if needed)")
-        except Exception as e:
-            print(f"⚠ Error deleting {db_file}: {e}")
+load_dotenv()
 
-# Create all tables
-Base.metadata.create_all(bind=engine)
-print("✓ Database tables created")
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+logger.info("Verifying Supabase database connection...")
+try:
+    with get_db() as db:
+        with db.cursor() as cur:
+            cur.execute("SELECT 1")
+    logger.info("✓ Successfully connected to Supabase database")
+except Exception as e:
+    logger.error(f"✗ Failed to connect to Supabase: {e}")
+    logger.error("Make sure SUPABASE_URL is set correctly in your .env file")
+    raise
+
+
 
 # Create a test user (optional)
-db = SessionLocal()
+logger.info("Checking for test user...")
 try:
-    # Check if test user exists
-    test_user = db.query(User).filter(User.username == "admin").first()
-    if not test_user:
-        admin = User(
-            username="admin",
-            hashed_password=get_password_hash("admin123")
-        )
-        db.add(admin)
-        db.commit()
-        print("✓ Test user created (username: admin, password: admin123)")
-    else:
-        print("ℹ Test user already exists")
+    with get_db() as db:
+        with db.cursor() as cur:
+            # Check if test user exists
+            cur.execute("SELECT id FROM users WHERE username = %s", ("admin",))
+            test_user = cur.fetchone()
+            
+            if not test_user:
+                # Create test user
+                hashed_password = get_password_hash("admin123")
+                cur.execute(
+                    "INSERT INTO users (username, password) VALUES (%s, %s) RETURNING id",
+                    ("admin", hashed_password)
+                )
+                user_id = cur.fetchone()[0]
+                db.commit()
+                logger.info(f"✓ Test user created (username: admin, password: admin123, ID: {user_id})")
+            else:
+                logger.info("ℹ Test user already exists")
 except Exception as e:
-    print(f"✗ Error creating test user: {e}")
-finally:
-    db.close()
-
-print("\n🎉 Database initialized successfully!")
-print("\nYou can now start the backend with: uvicorn main:app --reload")
-
+    logger.error(f"✗ Error creating test user: {e}")

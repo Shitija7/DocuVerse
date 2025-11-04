@@ -1,35 +1,75 @@
-from sqlalchemy.orm import Session
-from models import User, Document
-from datetime import datetime
+# crud.py
+from supabase import Client
 from auth import get_password_hash, verify_password
 
-def create_user(db: Session, username: str, password: str):
-    hashed_password = get_password_hash(password)  # uses truncation
-    user = User(username=username, hashed_password=hashed_password)
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    return user
+def create_user(supabase, username: str, password: str):
+    """Create a new user in Supabase"""
+    print(f"🧾 Creating user '{username}' in Supabase...")
 
-def authenticate_user(db: Session, username: str, password: str):
-    user = db.query(User).filter(User.username == username).first()
-    if not user or not verify_password(password, user.hashed_password):
+    hashed = get_password_hash(password)
+    try:
+        # Check if user already exists
+        existing = supabase.table("users").select("id").eq("username", username).execute()
+        if existing.data:
+            print(f"⚠️ User '{username}' already exists in Supabase.")
+            raise ValueError("Username already exists")
+
+        # Insert new user
+        response = supabase.table("users").insert({
+            "username": username,
+            "password": hashed
+        }).execute()
+
+        if not response.data:
+            print(f"❌ Insert failed — no data returned from Supabase.")
+            raise ValueError("Failed to create user in Supabase")
+
+        user = response.data[0]
+        print(f"✅ User created successfully in Supabase: {user}")
+        return user
+
+    except Exception as e:
+        print(f"❌ Error creating user in Supabase: {e}")
+        raise
+
+
+def authenticate_user(supabase: Client, username: str, password: str):
+    """Validate username and password."""
+    response = supabase.table("users").select("*").eq("username", username).execute()
+    if not response.data:
         return None
-    return user
+    user = response.data[0]
+    if verify_password(password, user["password"]):
+        return user
+    return None
 
-def create_document(db: Session, filename: str, content: str, user_id: int):
-    doc = Document(
-        filename=filename,
-        content=content,
-        user_id=user_id
-    )
-    db.add(doc)
-    db.commit()
-    db.refresh(doc)
-    return doc
+def create_document(supabase: Client, filename: str, content: str, user_id: int):
+    """Insert a new document."""
+    print(f"📝 Attempting to insert document: filename={filename}, user_id={user_id}, content_length={len(content)}")
+    try:
+        response = supabase.table("documents").insert({
+            "filename": filename,
+            "content": content,
+            "user_id": user_id
+        }).execute()
+        
+        if not response.data:
+            print(f"❌ Insert failed — no data returned from Supabase.")
+            print(f"Response: {response}")
+            raise ValueError("Failed to create document in Supabase: No data returned")
+        
+        print(f"✅ Document created successfully in Supabase: {response.data[0]}")
+        return response.data[0]
+    except Exception as e:
+        print(f"❌ Error creating document in Supabase: {type(e).__name__}: {e}")
+        raise
 
-def get_document(db: Session, doc_id: int, user_id: int):
-    return db.query(Document).filter(Document.id == doc_id, Document.user_id == user_id).first()
+def get_document(supabase: Client, doc_id: int, user_id: int):
+    """Fetch a document by id and user."""
+    response = supabase.table("documents").select("*").eq("id", doc_id).eq("user_id", user_id).execute()
+    return response.data[0] if response.data else None
 
-def get_user_documents(db: Session, user_id: int):
-    return db.query(Document).filter(Document.user_id == user_id).all()
+def get_user_documents(supabase: Client, user_id: int):
+    """Fetch all documents for a user."""
+    response = supabase.table("documents").select("*").eq("user_id", user_id).order("created_at", desc=True).execute()
+    return response.data or []

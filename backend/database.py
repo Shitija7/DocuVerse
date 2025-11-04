@@ -1,16 +1,18 @@
 # database.py
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from models import Base
 import os
+from supabase import create_client, Client
+from dotenv import load_dotenv
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./test.db")
+load_dotenv()
 
-is_sqlite = DATABASE_URL.startswith("sqlite")
-engine = create_engine(
-    DATABASE_URL,
-    connect_args={"check_same_thread": False} if is_sqlite else {}
-)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
-Base.metadata.create_all(bind=engine)
+if not SUPABASE_URL or not SUPABASE_KEY:
+    raise RuntimeError("❌ Missing Supabase credentials. Check .env file.")
+
+# Simple check
+print("🔑 Using Supabase key starts with:", SUPABASE_KEY[:10], "...")
+
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+print("✅ Connected to Supabase successfully!")

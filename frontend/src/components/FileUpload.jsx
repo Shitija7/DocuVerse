@@ -25,14 +25,18 @@ function FileUpload({ token, userId }) {
     setMessage('')
 
     try {
+      console.log('🚀 Starting upload...', { userId, token: token ? 'present' : 'missing' })
       const result = await uploadFile(file, userId, token)
+      console.log('✅ Upload successful:', result)
       setMessage(`✅ File "${result.filename}" uploaded successfully! (${result.text_length} chars)`)
       setIsError(false)
       setFile(null)
       // Reset file input
       document.getElementById('file-input').value = ''
     } catch (err) {
-      setMessage(err.response?.data?.error || 'Upload failed')
+      console.error('❌ Upload failed:', err)
+      const errorMsg = err.response?.data?.detail || err.response?.data?.error || err.message || 'Upload failed'
+      setMessage(`❌ Error: ${errorMsg}`)
       setIsError(true)
     } finally {
       setUploading(false)

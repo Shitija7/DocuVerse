@@ -22,17 +22,25 @@ export const login = async (username, password) => {
 
 // File upload
 export const uploadFile = async (file, userId, token) => {
+  console.log('📤 Uploading file:', file.name, 'for user:', userId)
   const formData = new FormData()
   formData.append('file', file)
   formData.append('user_id', String(userId))  // Convert to string for FormData
 
-  const response = await axios.post(`${API_BASE}/upload`, formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data',
-      'Authorization': `Bearer ${token}`
-    }
-  })
-  return response.data
+  try {
+    const response = await axios.post(`${API_BASE}/upload`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+        'Authorization': `Bearer ${token}`
+      }
+    })
+    console.log('✅ Upload response:', response.data)
+    return response.data
+  } catch (error) {
+    console.error('❌ Upload error:', error)
+    console.error('Error response:', error.response?.data)
+    throw error
+  }
 }
 
 // Ask question with user_id for document access
@@ -43,6 +51,7 @@ export const askQuestion = async (question, userId, token) => {
 
   const response = await axios.post(`${API_BASE}/ask`, formData, {
     headers: {
+      'Content-Type': 'multipart/form-data',
       'Authorization': `Bearer ${token}`
     }
   })
@@ -57,6 +66,7 @@ export const summarizeDocument = async (userId, docId, token) => {
 
   const response = await axios.post(`${API_BASE}/summarize`, formData, {
     headers: {
+      'Content-Type': 'multipart/form-data',
       'Authorization': `Bearer ${token}`
     }
   })

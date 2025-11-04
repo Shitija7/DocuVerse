@@ -3,13 +3,17 @@ import { askQuestion } from '../api'
 import { formatText } from '../utils/formatter'
 import './Chat.css'
 
-function Chat({ token, userId }) {
-  const [messages, setMessages] = useState([
-    { role: 'system', content: 'Hello! I can answer questions about your uploaded documents. What would you like to know?' }
-  ])
+function Chat({ token, userId, messages, setMessages }) {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const messagesEndRef = useRef(null)
+  
+  const [localMessages, setLocalMessages] = useState([
+    { role: 'system', content: 'Hello! I can answer questions about your uploaded documents. What would you like to know?' }
+  ])
+  
+  const chatMessages = messages !== undefined ? messages : localMessages
+  const setChatMessages = setMessages !== undefined ? setMessages : setLocalMessages
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -17,7 +21,7 @@ function Chat({ token, userId }) {
 
   useEffect(() => {
     scrollToBottom()
-  }, [messages])
+  }, [chatMessages])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -27,16 +31,16 @@ function Chat({ token, userId }) {
     setInput('')
     
     // Add user message
-    setMessages(prev => [...prev, { role: 'user', content: userMessage }])
+    setChatMessages(prev => [...prev, { role: 'user', content: userMessage }])
     setLoading(true)
 
     try {
       const response = await askQuestion(userMessage, userId, token)
       
       // Add bot response
-      setMessages(prev => [...prev, { role: 'bot', content: response.answer }])
+      setChatMessages(prev => [...prev, { role: 'bot', content: response.answer }])
     } catch (err) {
-      setMessages(prev => [...prev, { 
+      setChatMessages(prev => [...prev, { 
         role: 'bot', 
         content: '❌ Error: ' + (err.response?.data?.detail || 'Failed to get response') 
       }])
@@ -50,7 +54,7 @@ function Chat({ token, userId }) {
       <h2>Chat with Your Documents</h2>
       
       <div className="chat-messages">
-        {messages.map((msg, idx) => (
+        {chatMessages.map((msg, idx) => (
           <div key={idx} className={`message ${msg.role}`}>
             <div className="message-content">
               {msg.role === 'bot' && <span className="message-icon">🤖</span>}

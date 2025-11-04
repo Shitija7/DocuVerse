@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import './Dashboard.css'
 import FileUpload from './FileUpload'
 import Chat from './Chat'
@@ -7,6 +7,26 @@ import Summarize from './Summarize'
 function Dashboard({ token, userId, onLogout }) {
   const [activeTab, setActiveTab] = useState('upload')
   const username = localStorage.getItem('username') || 'User'
+  
+  const [chatMessages, setChatMessages] = useState(() => {
+    const saved = localStorage.getItem('chatMessages')
+    if (saved) {
+      try {
+        return JSON.parse(saved)
+      } catch (e) {
+        return [
+          { role: 'system', content: 'Hello! I can answer questions about your uploaded documents. What would you like to know?' }
+        ]
+      }
+    }
+    return [
+      { role: 'system', content: 'Hello! I can answer questions about your uploaded documents. What would you like to know?' }
+    ]
+  })
+  
+  useEffect(() => {
+    localStorage.setItem('chatMessages', JSON.stringify(chatMessages))
+  }, [chatMessages])
 
   return (
     <div className="dashboard">
@@ -42,7 +62,14 @@ function Dashboard({ token, userId, onLogout }) {
 
         <div className="tab-content">
           {activeTab === 'upload' && <FileUpload token={token} userId={userId} />}
-          {activeTab === 'chat' && <Chat token={token} userId={userId} />}
+          {activeTab === 'chat' && (
+            <Chat 
+              token={token} 
+              userId={userId} 
+              messages={chatMessages}
+              setMessages={setChatMessages}
+            />
+          )}
           {activeTab === 'summarize' && <Summarize token={token} userId={userId} />}
         </div>
       </div>
