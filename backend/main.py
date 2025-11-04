@@ -12,6 +12,8 @@ import numpy as np
 import google.generativeai as genai
 from dotenv import load_dotenv
 from typing import List
+from numpy import array, float32
+import faiss
 
 # ==============================
 # Load environment variables
@@ -20,10 +22,10 @@ load_dotenv()
 
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 if not GOOGLE_API_KEY:
-    raise RuntimeError("❌ GOOGLE_API_KEY missing! Add it to your .env file.")
+    raise RuntimeError(" GOOGLE_API_KEY missing! Add it to your .env file.")
 
 genai.configure(api_key=GOOGLE_API_KEY)
-print("✅ Google Gemini API key loaded successfully!")
+print(" Google Gemini API key loaded successfully!")
 
 # ==============================
 # App setup
@@ -73,49 +75,71 @@ def embed_texts(texts: List[str]) -> np.ndarray:
 
 
 def save_embeddings(doc_id: int, chunks: List[str], embeddings: np.ndarray):
-    index = faiss.IndexFlatL2(dimension)
+    """Store embeddings in Supabase (persistent) instead of only FAISS memory."""
+    from database import supabase
+    data_to_insert = []
+    for chunk, embedding in zip(chunks, embeddings):
+        data_to_insert.append({
+            "doc_id": doc_id,
+            "chunk_text": chunk,
+            "embedding": embedding.tolist()  # Convert NumPy array to list
+        })
+
+    try:
+        supabase.table("embeddings").insert(data_to_insert).execute()
+        print(f" Saved {len(chunks)} embeddings to Supabase for doc_id={doc_id}")
+    except Exception as e:
+        print(f" Failed to save embeddings: {e}")
+
+def load_faiss_index_from_supabase(doc_id: int):
+    response = supabase.table("embeddings").select("chunk_text, embedding").eq("doc_id", doc_id).execute()
+    data = response.data
+    if not data:
+        return None
+
+    chunks = [d["chunk_text"] for d in data]
+    embeddings = np.array([d["embedding"] for d in data], dtype=float32)
+    index = faiss.IndexFlatL2(embeddings.shape[1])
     index.add(embeddings)
-    vector_store[doc_id] = {"index": index, "chunks": chunks}
-
-
+    return {"index": index, "chunks": chunks}
 # ==============================
 # API Endpoints
 # ==============================
 
 @app.get("/")
 def root():
-    print("✅ Root endpoint accessed.")
-    return {"message": "🚀 RAG Chatbot Backend Running with Supabase!"}
+    print(" Root endpoint accessed.")
+    return {"message": " RAG Chatbot Backend Running with Supabase!"}
 
 
 # ---------- USER SIGNUP ----------
 @app.post("/signup")
 def signup(user: UserCreate):
     print("\n=========================")
-    print(f"📩 SIGNUP REQUEST for username: {user.username}")
+    print(f" SIGNUP REQUEST for username: {user.username}")
     print("=========================")
     try:
         db_user = create_user(supabase, user.username, user.password)
-        print(f"✅ SIGNUP SUCCESS: {db_user}")
+        print(f" SIGNUP SUCCESS: {db_user}")
         return {"id": db_user["id"], "username": db_user["username"]}
     except ValueError as e:
-        print(f"❌ SIGNUP ERROR: {e}")
+        print(f" SIGNUP ERROR: {e}")
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        print(f"❌ UNEXPECTED SIGNUP ERROR: {e}")
+        print(f" UNEXPECTED SIGNUP ERROR: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 # ---------- USER LOGIN ----------
 @app.post("/login")
 def login(user: UserLogin):
-    print(f"\n🔑 LOGIN REQUEST for username: {user.username}")
+    print(f"\ LOGIN REQUEST for username: {user.username}")
     db_user = authenticate_user(supabase, user.username, user.password)
     if not db_user:
-        print("❌ LOGIN FAILED: Invalid credentials")
+        print(" LOGIN FAILED: Invalid credentials")
         raise HTTPException(status_code=400, detail="Invalid credentials")
     token = create_access_token({"sub": db_user["username"]})
-    print(f"✅ LOGIN SUCCESS for user_id={db_user['id']}")
+    print(f" LOGIN SUCCESS for user_id={db_user['id']}")
     return {
         "access_token": token,
         "token_type": "bearer",
@@ -127,7 +151,7 @@ def login(user: UserLogin):
 # ---------- DOCUMENT UPLOAD ----------
 @app.post("/upload")
 async def upload_file(user_id: str = Form(...), file: UploadFile = File(...)):
-    print(f"\n📤 Upload request from user_id={user_id}, file={file.filename}")
+    print(f"\n Upload request from user_id={user_id}, file={file.filename}")
     try:
         user_id = int(user_id)
     except ValueError:
@@ -148,22 +172,22 @@ async def upload_file(user_id: str = Form(...), file: UploadFile = File(...)):
     if not text.strip():
         raise HTTPException(status_code=400, detail="No readable text found in file")
 
-    print(f"🧩 Extracted text length: {len(text)} chars")
+    print(f" Extracted text length: {len(text)} chars")
     
     try:
         doc = create_document(supabase, file.filename, text, user_id)
-        print(f"✅ Document stored in Supabase: {doc}")
+        print(f" Document stored in Supabase: {doc}")
     except Exception as e:
-        print(f"❌ FAILED to save document to Supabase: {type(e).__name__}: {e}")
+        print(f" FAILED to save document to Supabase: {type(e).__name__}: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to save document: {str(e)}")
 
     chunks = text_to_chunks(text)
     embeddings = embed_texts(chunks)
     save_embeddings(doc["id"], chunks, embeddings)
-    print(f"💾 Stored {len(chunks)} chunks in FAISS memory.")
+    print(f" Stored {len(chunks)} chunks in FAISS memory.")
 
     return {
-        "message": "✅ File uploaded and processed successfully!",
+        "message": " File uploaded and processed successfully!",
         "doc_id": doc["id"],
         "filename": doc["filename"],
         "chunks": len(chunks),
@@ -174,55 +198,68 @@ async def upload_file(user_id: str = Form(...), file: UploadFile = File(...)):
 # ---------- ASK ----------
 @app.post("/ask")
 async def ask(question: str = Form(...), user_id: str = Form(...)):
-    print(f"\n❓ ASK REQUEST: user_id={user_id}, question='{question}'")
+    print(f"\n ASK REQUEST: user_id={user_id}, question='{question}'")
     try:
         user_id = int(user_id)
     except ValueError:
         return {"answer": "Invalid user_id format"}
 
     documents = get_user_documents(supabase, user_id)
-    print(f"🗂 Found {len(documents)} documents for this user")
+    print(f" Found {len(documents)} documents for this user")
 
-    if not documents or not vector_store:
-        return {"answer": "No documents uploaded yet."}
+    if not documents:
+        return {"answer": "No documents found. Please upload first."}
 
     all_chunks = []
+
     for doc in documents:
-        if doc["id"] in vector_store:
-            chunks = vector_store[doc["id"]]["chunks"]
-            relevant = [chunk for chunk in chunks if any(word.lower() in chunk.lower()
-                           for word in question.split() if len(word) > 3)]
-            if relevant:
-                all_chunks.extend(relevant[:2])
+        print(f" Loading FAISS index for doc_id={doc['id']} from Supabase...")
+        vector_data = load_faiss_index_from_supabase(doc["id"])
+        if not vector_data:
+            print(f" No embeddings found in Supabase for doc_id={doc['id']}")
+            continue
 
-    if all_chunks:
-        context = "\n\n".join(all_chunks[:5])
-        prompt = f"""Based on the document, answer this:
+        index = vector_data["index"]
+        chunks = vector_data["chunks"]
 
+        # Embed the query
+        query_emb = embed_texts([question])
+        distances, indices = index.search(query_emb, 3)  # top 3 matches
+
+        for i in indices[0]:
+            if i < len(chunks):
+                all_chunks.append(chunks[i])
+
+    if not all_chunks:
+        return {"answer": "No relevant content found in documents."}
+
+    context = "\n\n".join(all_chunks[:5])
+    prompt = f"""Based on the following document content, answer the question clearly and precisely.
+
+Document Content:
 {context}
 
-Question: {question}"""
-    else:
-        prompt = f"Answer generally: {question}"
+Question: {question}
+"""
 
-    print("🤖 Generating response from Gemini...")
+    print(" Generating response from Gemini...")
     model = genai.GenerativeModel("gemini-flash-latest")
     response = model.generate_content(prompt)
-    print("✅ Gemini response ready.")
+    print(" Gemini response ready.")
     return {"answer": response.text.strip()}
 
 
 # ---------- GET DOCUMENTS ----------
 @app.get("/documents/{user_id}")
 async def get_user_docs(user_id: str):
-    print(f"\n📂 Fetching documents for user_id={user_id}")
+    print(f"\ Fetching documents for user_id={user_id}")
     try:
         user_id = int(user_id)
     except ValueError:
         return {"documents": []}
 
     documents = get_user_documents(supabase, user_id)
-    print(f"✅ Retrieved {len(documents)} document(s)")
+    print(f" Retrieved {len(documents)} document(s)")
     return {
         "documents": [{"id": d["id"], "filename": d["filename"]} for d in documents]
     }
