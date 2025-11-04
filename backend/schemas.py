@@ -1,4 +1,3 @@
-# schemas.py
 from pydantic import BaseModel
 from typing import Optional
 
@@ -20,7 +19,7 @@ class DocumentOut(BaseModel):
     text_length: Optional[int] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class QuestionRequest(BaseModel):
     question: str
